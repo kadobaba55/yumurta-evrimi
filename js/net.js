@@ -1,6 +1,6 @@
 // Yumurta Evrimi · online sıralama istemcisi
 // API boşken sıralama düğmeleri gizlenir; oyun çevrimdışı da oynanır.
-export const API = '';
+export const API = 'https://yumurta-skor.abdulkadiraslan838.workers.dev';
 
 export const enabled = () => !!API;
 
