@@ -25,18 +25,20 @@ export const CFG = {
   patches: 4,           // zengin yiyecek bölgeleri
   patchShare: 0.5,
   startCount: 20,
-  maxEggs: 5000,
+  maxEggs: 20000,       // yalnızca acil durum emniyeti; nüfusu kalabalık stresi frenler
+  crowdAt: 8,           // 40×40'lık karede bundan fazla yumurta varsa gider artar
+  crowdK: 0.3,          // her 'bir kat daha kalabalık' için gider artışı
   mut: 0.085,           // gen başına log-normal mutasyon
-  speciesDist: 0.5,    // log-gen uzayında yeni tür eşiği
-  nameAt: 25,           // bir aday tür bu kadar bireye ulaşınca isim alır
+  speciesDist: 0.7,    // log-gen uzayında yeni tür eşiği
+  nameAt: 25,           // isim için en az birey (ayrıca nüfusun %3'ü)
   gridCell: 40,
   team: 'Çatlak',
-  dpStart: 6, dpMax: 10, dpEvery: 5,   // deney puanı: her 6 sn +1
+  dpStart: 6, dpMax: 10, dpEvery: 6,   // deney puanı: her 6 sn +1
   warn: 40,             // felaket kaç sn önceden haber verilir
 };
 
 export const GENES = ['speed', 'size', 'vision'];
-const RANGE = { speed: [0.25, 3.2], size: [0.4, 3.2], vision: [0.25, 3.2] };
+const RANGE = { speed: [0.25, 3.2], size: [0.4, 2.6], vision: [0.25, 3.2] };
 
 const ADJ = {
   speed: [['Hızlı', 'Çevik', 'Şimşek'], ['Ağır', 'Uyuşuk', 'Kaplumbağa']],
@@ -72,14 +74,14 @@ export const DISASTERS = {
 
 // Her atlatılan felaketten sonra 3 tanesinden biri seçilir; seçimler üst üste biner
 export const UPGRADES = {
-  bereket: { name: 'Bereket', icon: '🌾', tip: 'Yem iki katına yaklaşır', max: 6 },
-  toprak: { name: 'Verimli toprak', icon: '🌱', tip: 'Kaba yeni bir zengin bölge', max: 4 },
-  dogurgan: { name: 'Doğurganlık', icon: '🥚', tip: 'Yumurtalar daha erken ürer', max: 4 },
+  bereket: { name: 'Bereket', icon: '🌾', tip: 'Yem %50 artar (üst üste katlanır)', max: 5 },
+  toprak: { name: 'Verimli toprak', icon: '🌱', tip: 'Yeni zengin bölge, yem %15 artar', max: 4 },
+  dogurgan: { name: 'Doğurganlık', icon: '🥚', tip: 'Yumurtalar daha erken ürer', max: 3 },
   omur: { name: 'Uzun ömür', icon: '⏳', tip: 'Yaşam süresi %25 uzar', max: 3 },
-  genis: { name: 'Geniş alan', icon: '⭕', tip: 'Kart alanları %20 büyür', max: 4 },
-  kalici: { name: 'Kalıcı kartlar', icon: '⌛', tip: 'Kartlar 10 sn uzun sürer', max: 3 },
+  genis: { name: 'Geniş alan', icon: '⭕', tip: 'Kart alanları %15 büyür', max: 3 },
+  kalici: { name: 'Kalıcı kartlar', icon: '⌛', tip: 'Kartlar 8 sn uzun sürer', max: 3 },
   puan: { name: 'Hızlı puan', icon: '⚡', tip: 'Deney puanı %25 hızlı dolar', max: 3 },
-  cep: { name: 'Büyük cep', icon: '👝', tip: 'En fazla puan +3', max: 2 },
+  cep: { name: 'Büyük cep', icon: '👝', tip: 'En fazla puan +2', max: 2 },
   evrim: { name: 'Hızlı evrim', icon: '🧬', tip: 'Mutasyonlar %40 artar', max: 3 },
 };
 
@@ -296,15 +298,18 @@ export class Sim {
   // ---------- oyuncu kartları: her kart bir felaketi kendi alanında durdurur ----------
   play(c, x = 0, y = 0) {
     const C = CARDS[c], R = this.cfg.R;
-    if (!C || this.over || this.dp < C.cost) return false;
+    const cost = this.cardCost(c);
+    if (!C || this.over || this.dp < cost) return false;
     x = Math.round(x * 10) / 10; y = Math.round(y * 10) / 10;
     if (x * x + y * y > R * R) return false;
-    this.dp -= C.cost;
+    this.dp -= cost;
     this.actions.push({ s: this.stepCount, c, x, y });
     this.zones.push({ type: c, x, y, r: C.r * this.mods.area, until: this.t + C.dur + this.mods.dur, dur: C.dur + this.mods.dur, acc: 0 });
     this.events.push({ t: this.t, type: 'card', card: c, x, y });
     return true;
   }
+  cardCost(c) { return CARDS[c].cost + Math.floor(this.dzi / 8); }
+
   // ---------- evrim yükseltmeleri ----------
   _offer() {
     const pool = Object.keys(UPGRADES).filter((k) => (this.ups[k] || 0) < UPGRADES[k].max);
@@ -317,16 +322,17 @@ export class Sim {
     if (!this.offer || !this.offer.includes(id) || this.over) return false;
     const M = this.mods;
     this.ups[id] = (this.ups[id] || 0) + 1;
-    if (id === 'bereket') M.food += 1;
+    if (id === 'bereket') M.food *= 1.5;
     else if (id === 'toprak') {
       const [x, y] = randDisk(this.drng, this.cfg.R * 0.65);
       this.patches.push({ x, y, r: 80 + this.drng() * 40 });
-    } else if (id === 'dogurgan') M.repro = Math.max(0.45, M.repro - 0.07);
+      M.food *= 1.15;
+    } else if (id === 'dogurgan') M.repro = Math.max(0.6, M.repro - 0.05);
     else if (id === 'omur') M.life += 0.25;
-    else if (id === 'genis') M.area += 0.2;
-    else if (id === 'kalici') M.dur += 10;
+    else if (id === 'genis') M.area += 0.15;
+    else if (id === 'kalici') M.dur += 8;
     else if (id === 'puan') M.dpEvery *= 0.8;
-    else if (id === 'cep') M.dpMax += 3;
+    else if (id === 'cep') M.dpMax += 2;
     else if (id === 'evrim') M.mut += 0.4;
     this.offer = null;
     this.actions.push({ s: this.stepCount, c: 'up', x: id, y: 0 });
@@ -350,11 +356,13 @@ export class Sim {
     while (t < 60000) {
       const types = [first[k] || pick(prev)];
       // 6. felaketten sonra her ikincisi çifte gelir
-      if (k >= 6 && k % 2 === 0) types.push(pick([...types, ...prev]));
+      // 6'dan sonra her ikincisi çifte, 16'dan sonra hepsi çifte, 24'ten sonra her üçüncüsü üçlü
+      if ((k >= 6 && k % 2 === 0) || k >= 16) types.push(pick([...types, ...prev]));
+      if (k >= 24 && k % 3 === 0) types.push(pick([...types, ...prev]));
       const dur = 35 + Math.min(25, k * 2);
-      list.push({ types, k, pow: 1 + 0.2 * k, warnAt: t - this.cfg.warn, start: t, end: t + dur, warned: false, started: false });
+      list.push({ types, k, pow: 1.3 + 0.35 * k, warnAt: t - this.cfg.warn, start: t, end: t + dur, warned: false, started: false });
       prev = types;
-      t += dur + Math.max(30, 70 - k * 4);
+      t += dur + Math.max(22, 70 - k * 3);
       k++;
     }
     this.schedule = list;
@@ -369,18 +377,18 @@ export class Sim {
       D.started = true; this.active = D;
       this.events.push({ t: this.t, type: 'dz', dz: D.types });
       if (D.types.includes('meteor')) {
-        const n = Math.round((D.end - D.start) * (0.45 + 0.1 * D.k));
+        const n = Math.round((D.end - D.start) * Math.min(1.2, 0.45 + 0.05 * D.k));
         for (let i = 0; i < n; i++) {
           const [x, y] = randDisk(this.drng, this.cfg.R);
-          this.meteors.push({ x, y, r: 55 + 3 * D.k, t: D.start + 2 + this.drng() * (D.end - D.start - 2), hit: false });
+          this.meteors.push({ x, y, r: Math.min(110, 55 + 3 * D.k), t: D.start + 2 + this.drng() * (D.end - D.start - 2), hit: false });
         }
       }
       if (D.types.includes('avci')) {
-        const n = Math.min(14, 3 + D.k);
+        const n = Math.min(18, 3 + D.k);
         for (let i = 0; i < n; i++) {
           const a = this.drng() * Math.PI * 2, R = this.cfg.R - 20;
-          this.predators.push({ x: Math.cos(a) * R, y: Math.sin(a) * R, h: a + Math.PI, spd: 52 + 4 * Math.min(10, D.k),
-            vis: 160, size: 2 + 0.1 * Math.min(10, D.k), cd: 0, prey: null, dead: false });
+          this.predators.push({ x: Math.cos(a) * R, y: Math.sin(a) * R, h: a + Math.PI, spd: 52 + 3 * Math.min(15, D.k),
+            vis: 160, size: 2 + 0.08 * D.k, cd: 0, prey: null, dead: false });
         }
       }
     }
@@ -399,7 +407,7 @@ export class Sim {
       if (!p.prey || this.rng() < 0.02) {
         let best = null, bd = p.vis * p.vis;
         for (const e of this.eggs) {
-          if (e.dead || e.g.size >= p.size * 0.85) continue;
+          if (e.dead || e.g.size >= p.size) continue;
           const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
           if (d < bd) { bd = d; best = e; }
         }
@@ -454,7 +462,7 @@ export class Sim {
     if (this.zones.length) this._zones(dt);
 
     let foodMul = this.season();
-    if (this.has('kitlik')) foodMul *= Math.max(0.1, 0.35 - 0.03 * A.k);
+    if (this.has('kitlik')) foodMul *= Math.max(0.05, 0.3 - 0.025 * A.k);
     if (this.has('buzul')) foodMul *= 0.8;
     this.foodAcc += c.foodRate * foodMul * M.food * dt;
     while (this.foodAcc >= 1) {
@@ -470,6 +478,11 @@ export class Sim {
       }
     }
     if (this.predators.length) this._predators(dt);
+
+    // kalabalık: her karedeki yumurta sayısı (sıkışanlar daha çok enerji harcar)
+    const crowd = (this.crowd ??= new Uint16Array(this.gn * this.gn));
+    crowd.fill(0);
+    for (const e of this.eggs) if (!e.dead) crowd[this._cellOf(e.x, e.y)]++;
 
     const births = [];
     for (const e of this.eggs) {
@@ -508,8 +521,11 @@ export class Sim {
       }
 
       let cost = costOf(g);
-      if (this.has('buzul') && !this.inZone('isitici', e.x, e.y)) cost += A.pow * Math.max(0, 1.45 - g.size) * 2.4;
-      if (this.has('sicak') && !this.inZone('golge', e.x, e.y)) cost += A.pow * Math.max(0, g.size - 0.75) * 2.4;
+      const nc = crowd[this._cellOf(e.x, e.y)];
+      if (nc > c.crowdAt) cost *= 1 + c.crowdK * (nc / c.crowdAt - 1);
+      // soğuk herkesi yorar, iriler daha az; sıcak herkesi yorar, minikler daha az
+      if (this.has('buzul') && !this.inZone('isitici', e.x, e.y)) cost += A.pow * 1.6 / g.size;
+      if (this.has('sicak') && !this.inZone('golge', e.x, e.y)) cost += A.pow * 1.1 * g.size;
       e.energy -= cost * dt;
       e.age += dt;
       if (e.energy <= 0 || e.age > e.maxAge) { e.dead = true; continue; }
@@ -550,7 +566,7 @@ export class Sim {
       sp.logMean = s.l.map((v) => v / s.n);
       GENES.forEach((k, i) => (sp.mean[k] = Math.exp(sp.logMean[i])));
       sp.peak = Math.max(sp.peak, sp.count);
-      if (!sp.named && sp.count >= this.cfg.nameAt) {
+      if (!sp.named && sp.count >= Math.max(this.cfg.nameAt, this.eggs.length * 0.03)) {
         sp.named = true;
         sp.namedAt = this.t;
         sp.hue = this._pickHue(sp.hue);

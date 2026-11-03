@@ -185,7 +185,7 @@ export function drawHUD(ctx, sim, ui) {
   const need = new Set([...(A ? A.types : []), ...(N && N.warned ? N.types : [])].map((t) => DISASTERS[t].card));
   CARD_KEYS.forEach((key, i) => {
     const C = CARDS[key], r = cardRect(i), sel = ui.sel === key;
-    const poor = sim.dp < C.cost, wanted = need.has(key);
+    const cost = sim.cardCost(key), poor = sim.dp < cost, wanted = need.has(key);
     const y = r.y - (sel ? 26 : wanted ? 10 + 8 * Math.sin(ui.now / 140) : 0);
     ctx.save();
     if (wanted && !sel) {
@@ -213,7 +213,7 @@ export function drawHUD(ctx, sim, ui) {
     ctx.beginPath(); ctx.arc(r.x + r.w - 26, y + 28, 26, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = 4; ctx.strokeStyle = '#23232b'; ctx.stroke();
     ctx.fillStyle = '#23232b'; ctx.font = `800 32px ${FONT_BIG}`;
-    ctx.fillText(C.cost, r.x + r.w - 26, y + 40);
+    ctx.fillText(cost, r.x + r.w - 26, y + 40);
     ctx.restore();
   });
 

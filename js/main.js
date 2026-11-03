@@ -202,7 +202,7 @@ function cardAt(x, y) {
 }
 function tryPlay(key, x, y) {
   const C = CARDS[key];
-  if (st.sim.dp < C.cost) { st.flash = { text: `${C.cost} puan gerek`, at: st.now, size: 80 }; return false; }
+  if (st.sim.dp < st.sim.cardCost(key)) { st.flash = { text: `${st.sim.cardCost(key)} puan gerek`, at: st.now, size: 80 }; return false; }
   const a = aimAt(key, x, y);
   st.aim = null;
   const ok = !!(a && st.sim.play(key, a.x, a.y));
@@ -214,7 +214,7 @@ function tryPlay(key, x, y) {
 const touches = new Map();
 let pinch = null, drag = null, lastTap = 0;
 canvas.addEventListener('pointerdown', (ev) => {
-  canvas.setPointerCapture(ev.pointerId);
+  try { canvas.setPointerCapture(ev.pointerId); } catch { /* bazı tarayıcılarda dokunuş çoktan bitmiş olabilir */ }
   unlock();
   const [x, y] = toCanvas(ev);
   touches.set(ev.pointerId, [x, y]);
@@ -225,7 +225,7 @@ canvas.addEventListener('pointerdown', (ev) => {
     drag = null;
     return;
   }
-  drag = { x, y, cx: R.cam.x, cy: R.cam.y, moved: false };
+  drag = { x, y, cx: R.cam.x, cy: R.cam.y, moved: false, at: performance.now() };
   // karttan başlayan sürükleme kartı taşır
   const key = st.mode === 'play' && !st.sim.offer ? cardAt(x, y) : null;
   if (key) st.drag = { key, x, y, moved: false };
@@ -271,13 +271,15 @@ canvas.addEventListener('pointerup', (ev) => {
   if (pinch) { if (!touches.size) pinch = null; drag = null; return; }
   const d = drag; drag = null;
   if (!d || d.moved) return;
+  // seçim ekranı açılmadan önce başlamış dokunuş (ör. kart sürüklerken) seçim yapamaz
+  if (st.sim.offer && (d.at < st.offerAt || performance.now() - st.offerAt < 600)) return;
   tap(x, y);
 });
 
 // karta dokunmak: seç / bırak (sonra kaba dokunarak da oynanabilir)
 function tapCard(key) {
   const C = CARDS[key];
-  if (st.sim.dp < C.cost) { st.flash = { text: `${C.cost} puan gerek`, at: st.now, size: 80 }; return; }
+  if (st.sim.dp < st.sim.cardCost(key)) { st.flash = { text: `${st.sim.cardCost(key)} puan gerek`, at: st.now, size: 80 }; return; }
   st.sel = st.sel === key ? null : key;
   st.aim = null;
 }
