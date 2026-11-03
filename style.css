@@ -18,12 +18,13 @@ html, body {
 }
 
 /* isim kutusu: konumu ve boyutu main.js tuvale göre ayarlar */
+/* görünmez: yazılan ad tuvale çizilir (iOS klavyesi kutuyu kaydırsa da yazı yerinde kalır) */
 #name {
-  position: fixed; border: none; background: transparent; outline: none; text-align: center;
-  font-family: "Shantell Sans", system-ui, sans-serif; font-weight: 800; color: var(--ink);
+  position: fixed; border: none; background: transparent; outline: none;
+  opacity: 0; color: transparent; caret-color: transparent;
+  font-size: 16px; /* 16px altı iOS'ta sayfayı yakınlaştırır */
   -webkit-user-select: text; user-select: text;
 }
-#name::placeholder { color: #9a8f7a; font-weight: 500; }
 #name[hidden] { display: none; }
 
 /* kayıt düğmesi yalnızca geniş ekranda, oyunun dışında */

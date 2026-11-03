@@ -284,7 +284,22 @@ export function drawStart(ctx, ui) {
   roundRect(ctx, NAME_BOX.x, NAME_BOX.y, NAME_BOX.w, NAME_BOX.h, 18); ctx.fill();
   ctx.lineWidth = 5; ctx.strokeStyle = ui.nameNeeded ? '#d8331f' : '#23232b';
   roundRect(ctx, NAME_BOX.x, NAME_BOX.y, NAME_BOX.w, NAME_BOX.h, 18); ctx.stroke();
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const cy = NAME_BOX.y + NAME_BOX.h / 2 + 3;
+  if (ui.name) {
+    ctx.font = `800 44px ${FONT_BIG}`; ctx.fillStyle = '#23232b';
+    ctx.fillText(ui.name, W / 2, cy, NAME_BOX.w - 60);
+  } else {
+    ctx.font = `500 38px ${FONT_BIG}`; ctx.fillStyle = '#9a8f7a';
+    ctx.fillText(ui.nameFocus ? '' : 'Adın ya da @kullanıcı adın', W / 2, cy);
+  }
+  if (ui.nameFocus && Math.floor(ui.now / 500) % 2 === 0) {
+    ctx.font = `800 44px ${FONT_BIG}`;
+    const tw = ui.name ? Math.min(ctx.measureText(ui.name).width, NAME_BOX.w - 60) : 0;
+    ctx.fillStyle = '#d8331f';
+    ctx.fillRect(W / 2 + tw / 2 + 6, cy - 26, 5, 52);
+  }
+  ctx.textBaseline = 'alphabetic';
   if (ui.best) outlinedPair(ctx, 'Rekorun: ', `${ui.best}`, W / 2, 1275, `800 46px ${FONT_BIG}`, 8, ' nesil');
   const lines = ['🃏 Her felaketin bir karşı kartı var', '👆 Kartı kaba sürükle, alanı korusun', '🏆 Skorun: ulaştığın nesil'];
   ctx.font = `700 48px ${FONT_HAND}`; ctx.textAlign = 'left';

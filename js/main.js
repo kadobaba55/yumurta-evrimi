@@ -40,14 +40,16 @@ nameInput.oninput = () => {
   save('yumurta_isim', st.name.trim());
 };
 nameInput.onkeydown = (ev) => { if (ev.key === 'Enter') nameInput.blur(); };
+nameInput.onfocus = () => (st.nameFocus = true);
+nameInput.onblur = () => { st.nameFocus = false; window.scrollTo(0, 0); };
 function placeName() {
   const show = st.mode === 'start';
   nameInput.hidden = !show;
-  if (!show) return;
+  if (!show || st.nameFocus) return;   // yazarken yerini oynatma
   const r = canvas.getBoundingClientRect(), k = r.width / W, b = HUD.NAME_BOX;
   Object.assign(nameInput.style, {
     left: `${r.left + b.x * k}px`, top: `${r.top + b.y * k}px`,
-    width: `${b.w * k}px`, height: `${b.h * k}px`, fontSize: `${40 * k}px`,
+    width: `${b.w * k}px`, height: `${b.h * k}px`,
   });
 }
 const newSeed = () => +params.get('seed') || 1 + Math.floor(Math.random() * 999999);
@@ -266,6 +268,8 @@ function tapCard(key) {
 
 function tap(x, y) {
   if (st.mode === 'start') {
+    if (HUD.hit(HUD.NAME_BOX, x, y)) { nameInput.focus(); return; }
+    if (st.nameFocus) nameInput.blur();
     for (const team of ['Çatlak', 'Patlak']) if (HUD.hit(HUD.START_BTN[team], x, y)) startGame(team);
     if (st.online && HUD.hit(HUD.START_BOARD, x, y)) openBoard('start');
     return;
