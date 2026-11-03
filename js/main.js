@@ -3,11 +3,12 @@ import { Sim, CARDS, DISASTERS } from './sim.js';
 import { Renderer } from './render.js';
 import * as HUD from './hud.js';
 import * as NET from './net.js';
+import { unlock, sfx } from './sfx.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const { W, H, DISH } = HUD;
-const SPEEDS = [2, 4, 8];
+const SPEEDS = [1, 2, 4];
 const GAME_URL = 'https://kadobaba55.github.io/yumurta-evrimi/';
 
 const canvas = $('world');
@@ -77,14 +78,17 @@ function startGame(team) {
   st.mode = 'play'; st.paused = false; st.sel = null; st.aim = null;
   st.toast = null; st.flash = { text: 'BAŞLA!', at: st.now, color: '#ffd23a' };
   st.survived = 0; st.newBest = false; st.shareMsg = ''; st.acc = 0; st.evIdx = 0;
+  sfx.start();
 }
 function endGame() {
   st.mode = 'over'; st.sel = null; st.aim = null; st.drag = null;
+  sfx.over();
   const score = st.sim.maxGen;
   st.newBest = score > st.best;
   if (st.newBest) { st.best = score; save('yumurta_rekor', score); }
   st.rank = null; st.rankMsg = '';
-  if (!st.online) return;
+  // geliştirme sırasında gerçek sıralamaya skor gitmesin
+  if (!st.online || params.has('debug') || location.hostname === 'localhost') return;
   const s = st.sim;
   st.rankMsg = 'Skor gönderiliyor…';
   NET.submitScore({ name: st.name, team: s.cfg.team, score, seed: s.seed, simt: Math.round(s.t), cards: s.actions.length })
@@ -104,7 +108,7 @@ function loadBoard(period) {
 async function share() {
   const s = st.sim;
   const text = `Yumurta Evrimi'nde ${s.cfg.team} soyum ${s.maxGen} nesil yaşadı 🥚 ` +
-    `${st.survived} felaket atlattım. Rekorum ${st.best}. Sen geçebilir misin? ${GAME_URL}`;
+    `${s.namedCount() - 1} kez evrimleşti, ${s.dzi} felaket atlattı. Rekorum ${st.best}. Sen geçebilir misin? ${GAME_URL}`;
   try {
     if (navigator.share) { await navigator.share({ text }); return; }
   } catch { /* iptal ya da izin yok */ }
@@ -120,16 +124,23 @@ function onEvent(ev) {
   if (ev.type === 'new') {
     const sp = sim.species.get(ev.sp);
     st.toast = { type: 'new', text: ev.text, hue: sp.hue, at: st.now };
+    sfx.species();
   } else if (ev.type === 'dz') {
     st.flash = { text: ev.dz.map((t) => `${DISASTERS[t].icon} ${DISASTERS[t].name}`).join(' + ') + '!', at: st.now, size: ev.dz.length > 1 ? 64 : 92 };
     navigator.vibrate?.(120);
+    sfx.disaster();
   } else if (ev.type === 'warn') {
     navigator.vibrate?.([40, 60, 40]);
+    sfx.warn();
   } else if (ev.type === 'survived') {
     st.survived++;
     st.flash = { text: 'ATLATILDI ✓', at: st.now, color: '#9be36b' };
+    sfx.survived();
   } else if (ev.type === 'caught') {
     st.flash = { text: '🪤 YAKALANDI!', at: st.now, size: 76, color: '#9be36b' };
+    sfx.caught();
+  } else if (ev.type === 'offer') {
+    st.offerAt = st.now; st.sel = null; st.aim = null; st.drag = null;
   } else if (ev.type === 'over') {
     endGame();
   }
@@ -142,10 +153,12 @@ function frame(now) {
   last = now; st.now = now;
   const sim = st.sim;
   const running = st.mode === 'start' || (st.mode === 'play' && !st.paused);
-  if (running && !sim.over) {
+  if (st.mode === 'start' && sim.offer) sim.choose(sim.offer[0]);
+  if (running && !sim.over && !sim.offer) {
     st.acc += rdt * (st.mode === 'start' ? 3 : st.speed);
     let n = 0;
-    while (st.acc >= sim.cfg.dt && n < 60) { sim.step(); st.acc -= sim.cfg.dt; n++; }
+    while (st.acc >= sim.cfg.dt && n < 60 && !sim.offer) { sim.step(); st.acc -= sim.cfg.dt; n++; }
+    if (sim.offer) st.acc = 0;
     if (n >= 60) st.acc = 0;
   }
   while (st.evIdx < sim.events.length) onEvent(sim.events[st.evIdx++]);
@@ -158,7 +171,8 @@ function frame(now) {
   R.draw(sim, W, H, 1, { S: 1.45, aim: st.aim });
   if (st.mode === 'play') {
     HUD.drawHUD(R.ctx, sim, st);
-    if (st.tutor) HUD.drawTutorial(R.ctx, sim, st);
+    if (sim.offer) HUD.drawOffer(R.ctx, sim, st);
+    else if (st.tutor) HUD.drawTutorial(R.ctx, sim, st);
   } else if (st.mode === 'start') HUD.drawStart(R.ctx, st);
   else if (st.mode === 'board') HUD.drawBoard(R.ctx, st);
   else HUD.drawOver(R.ctx, sim, st);
@@ -192,6 +206,7 @@ function tryPlay(key, x, y) {
   const a = aimAt(key, x, y);
   st.aim = null;
   const ok = !!(a && st.sim.play(key, a.x, a.y));
+  if (ok) sfx.drop();
   if (ok && st.tutor) { st.tutor = false; save('yumurta_ogrendi', 1); }
   return ok;
 }
@@ -200,6 +215,7 @@ const touches = new Map();
 let pinch = null, drag = null, lastTap = 0;
 canvas.addEventListener('pointerdown', (ev) => {
   canvas.setPointerCapture(ev.pointerId);
+  unlock();
   const [x, y] = toCanvas(ev);
   touches.set(ev.pointerId, [x, y]);
   if (touches.size === 2 && st.mode === 'play' && !st.drag) {
@@ -211,7 +227,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   }
   drag = { x, y, cx: R.cam.x, cy: R.cam.y, moved: false };
   // karttan başlayan sürükleme kartı taşır
-  const key = st.mode === 'play' ? cardAt(x, y) : null;
+  const key = st.mode === 'play' && !st.sim.offer ? cardAt(x, y) : null;
   if (key) st.drag = { key, x, y, moved: false };
   else if (st.sel) aimAt(st.sel, x, y);
 });
@@ -286,8 +302,12 @@ function tap(x, y) {
     else if (HUD.hit(HUD.BOARD_BTN.back, x, y)) st.mode = st.boardFrom;
     return;
   }
-  if (HUD.hit(HUD.BTN.pause, x, y)) { st.paused = !st.paused; return; }
-  if (HUD.hit(HUD.BTN.speed, x, y)) { st.speed = SPEEDS[(SPEEDS.indexOf(st.speed) + 1) % SPEEDS.length]; return; }
+  if (st.sim.offer) {
+    st.sim.offer.forEach((id, i) => { if (HUD.hit(HUD.offerRect(i), x, y) && st.sim.choose(id)) sfx.upgrade(); });
+    return;
+  }
+  if (HUD.hit(HUD.BTN.pause, x, y)) { st.paused = !st.paused; sfx.tap(); return; }
+  if (HUD.hit(HUD.BTN.speed, x, y)) { st.speed = SPEEDS[(SPEEDS.indexOf(st.speed) + 1) % SPEEDS.length]; sfx.tap(); return; }
   if (st.sel && inDish(x, y)) {
     if (tryPlay(st.sel, x, y)) st.sel = null;
     return;
@@ -329,6 +349,9 @@ function toggleRec() {
   $('rec').classList.add('on'); $('rec').textContent = '■ Durdur';
 }
 $('rec').onclick = toggleRec;
+
+// test için: ?debug ile durum konsoldan erişilir
+if (params.has('debug')) window.__yumurta = { st, R };
 
 // ---------- başlat ----------
 Object.assign(R.cam, homeCam());

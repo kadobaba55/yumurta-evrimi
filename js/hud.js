@@ -1,5 +1,5 @@
 // Yumurta Evrimi · oyun ekranı (1080×1920 tuval üstüne çizilir, kayda da girer)
-import { CARDS, DISASTERS, GENES } from './sim.js';
+import { CARDS, DISASTERS, GENES, UPGRADES } from './sim.js';
 import { FONT_BIG, FONT_HAND, outlined, outlinedPair, roundRect, tapeRect, drawToast, eggPath } from './render.js';
 
 export const W = 1080, H = 1920;
@@ -10,8 +10,8 @@ export const cardRect = (i) => ({ x: CX0 + i * (CW + GAP), y: CY, w: CW, h: CH }
 export const BTN = { pause: { x: 24, y: 24, w: 110, h: 84 }, speed: { x: W - 134, y: 24, w: 110, h: 84 } };
 export const START_BTN = { Çatlak: { x: 130, y: 790, w: 340, h: 400 }, Patlak: { x: 610, y: 790, w: 340, h: 400 } };
 export const OVER_BTN = {
-  again: { x: 140, y: 1290, w: 800, h: 140 }, share: { x: 140, y: 1460, w: 800, h: 140 },
-  board: { x: 140, y: 1630, w: 800, h: 140 },
+  again: { x: 140, y: 1290, w: 800, h: 130 }, share: { x: 140, y: 1450, w: 800, h: 130 },
+  board: { x: 140, y: 1610, w: 800, h: 130 },
 };
 export const NAME_BOX = { x: 160, y: 565, w: 760, h: 100 };   // isim kutusu (DOM input buraya oturur)
 export const START_BOARD = { x: 290, y: 1650, w: 500, h: 110 };
@@ -166,17 +166,19 @@ export function drawHUD(ctx, sim, ui) {
   const dy = 1612;
   ctx.font = `700 44px ${FONT_HAND}`; ctx.textAlign = 'left';
   outlined(ctx, 'Deney puanı', 40, dy + 14, 6);
-  for (let i = 0; i < sim.cfg.dpMax; i++) {
-    const cx = 300 + i * 74;
+  // "Büyük cep" ile 16 puana kadar çıkabilir: daireler sığacak kadar küçülür
+  const dn = sim.mods.dpMax, step = Math.min(74, 740 / dn), rr = Math.min(24, step * 0.36);
+  for (let i = 0; i < dn; i++) {
+    const cx = 300 + rr + i * step;
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.beginPath(); ctx.arc(cx, dy, 24, 0, Math.PI * 2); ctx.fill();
-    let f = i < sim.dp ? 1 : i === sim.dp ? sim.dpT / sim.cfg.dpEvery : 0;
+    ctx.beginPath(); ctx.arc(cx, dy, rr, 0, Math.PI * 2); ctx.fill();
+    let f = i < sim.dp ? 1 : i === sim.dp ? sim.dpT / sim.mods.dpEvery : 0;
     if (f > 0) {
       ctx.fillStyle = f === 1 ? '#ffd23a' : 'rgba(255,210,58,0.45)';
-      ctx.beginPath(); ctx.moveTo(cx, dy); ctx.arc(cx, dy, 20, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx, dy); ctx.arc(cx, dy, rr - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); ctx.closePath(); ctx.fill();
     }
     ctx.lineWidth = 3; ctx.strokeStyle = '#fff';
-    ctx.beginPath(); ctx.arc(cx, dy, 24, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, dy, rr, 0, Math.PI * 2); ctx.stroke();
   }
 
   // kartlar
@@ -313,42 +315,139 @@ export function drawStart(ctx, ui) {
 // ---------- oyun sonu ----------
 export function drawOver(ctx, sim, ui) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = 'rgba(20,10,4,0.8)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.font = `800 80px ${FONT_BIG}`;
+  outlined(ctx, 'SOYUN TÜKENDİ', W / 2, 190, 12, '#ff7a5c');
+  outlinedPair(ctx, 'NESİL ', String(sim.maxGen), W / 2, 380, `800 170px ${FONT_BIG}`, 18);
+  if (ui.newBest) {
+    ctx.save();
+    ctx.translate(W / 2, 480); ctx.rotate(-0.05);
+    ctx.font = `800 60px ${FONT_BIG}`; ctx.textAlign = 'center';
+    const sw = ctx.measureText('YENİ REKOR!').width + 60;
+    ctx.lineWidth = 7; ctx.strokeStyle = '#d8331f';
+    roundRect(ctx, -sw / 2, -52, sw, 92, 14); ctx.stroke();
+    ctx.fillStyle = '#ff5a3c';
+    ctx.fillText('YENİ REKOR!', 0, 14);
+    ctx.restore();
+  } else {
+    outlinedPair(ctx, 'Rekorun: ', `${ui.best}`, W / 2, 490, `800 50px ${FONT_BIG}`, 8);
+  }
+
+  drawTree(ctx, sim, { x: 60, y: 550, w: W - 120, h: 560 });
+
+  const m = Math.floor(sim.t / 60), s = Math.floor(sim.t % 60);
+  ctx.font = `700 46px ${FONT_HAND}`; ctx.textAlign = 'center';
+  outlined(ctx, `${sim.dzi} felaket · en kalabalık ${sim.peakPop.toLocaleString('tr')} yumurta · ${m}:${String(s).padStart(2, '0')}`, W / 2, 1170, 7);
+  if (ui.online) {
+    ctx.font = `800 42px ${FONT_BIG}`;
+    const msg = ui.rank ? `🏆 Sıralamada ${ui.rank.rank}. oldun (${ui.rank.players} oyuncu)` : ui.rankMsg || '';
+    if (msg) outlined(ctx, msg, W / 2, 1235, 8, '#ffd23a');
+    paperButton(ctx, OVER_BTN.board, '🏆 Sıralama', false, 52);
+  }
+  paperButton(ctx, OVER_BTN.again, 'Tekrar oyna', true, 52);
+  paperButton(ctx, OVER_BTN.share, ui.shareMsg || 'Skorunu paylaş', false, 52);
+}
+
+// ---------- evrim çizelgesi: her isimli tür bir şerit, kimden türediği çizgiyle ----------
+function drawTree(ctx, sim, box) {
+  const named = [...sim.species.values()].filter((s) => s.named)
+    .map((s) => ({ ...s, from: s.namedAt ?? 0, to: s.died ?? sim.t }));
+  const evolutions = named.length - 1;
+  ctx.fillStyle = 'rgba(251,246,228,0.95)';
+  roundRect(ctx, box.x, box.y, box.w, box.h, 22); ctx.fill();
+  ctx.fillStyle = '#23232b'; ctx.textAlign = 'left';
+  ctx.font = `800 40px ${FONT_BIG}`;
+  ctx.fillText('🧬 Evrim çizelgesi', box.x + 28, box.y + 58);
+  ctx.textAlign = 'right'; ctx.font = `800 40px ${FONT_BIG}`; ctx.fillStyle = '#d8331f';
+  ctx.fillText(`${evolutions} evrim`, box.x + box.w - 28, box.y + 58);
+
+  // çok tür varsa en uzun yaşayanlar + kök gösterilir
+  const MAX = 16;
+  let lanes = named;
+  if (named.length > MAX) {
+    const keep = new Set([named[0].id, ...[...named].sort((a, b) => (b.to - b.from) * b.peak - (a.to - a.from) * a.peak).slice(0, MAX - 1).map((s) => s.id)]);
+    lanes = named.filter((s) => keep.has(s.id));
+  }
+  const px = box.x + 28, pw = box.w - 56, top = box.y + 110, ph = box.h - 150;
+  const T = Math.max(1, sim.t), X = (t) => px + (t / T) * pw;
+  const lh = Math.min(30, ph / Math.max(1, lanes.length));
+  const laneY = new Map(lanes.map((s, i) => [s.id, top + i * lh + lh / 2]));
+
+  // felaketler: üstte küçük simgeler ve ince bantlar
+  ctx.textAlign = 'center'; ctx.font = `24px ${FONT_BIG}`;
+  for (const D of sim.schedule) {
+    if (!D.started) break;
+    ctx.fillStyle = 'rgba(216,51,31,0.08)';
+    ctx.fillRect(X(D.start), top - 8, Math.max(2, X(Math.min(D.end, T)) - X(D.start)), ph + 8);
+    ctx.fillStyle = '#000';
+    ctx.fillText(DISASTERS[D.types[0]].icon, X(D.start) + 10, top - 14);
+  }
+
+  // kimden türedi
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(35,35,43,0.35)';
+  for (const s of lanes) {
+    let p = s.parent != null ? sim.species.get(s.parent) : null;
+    while (p && !laneY.has(p.id)) p = p.parent != null ? sim.species.get(p.parent) : null;
+    if (!p) continue;
+    ctx.beginPath(); ctx.moveTo(X(s.from), laneY.get(p.id)); ctx.lineTo(X(s.from), laneY.get(s.id)); ctx.stroke();
+  }
+  for (const s of lanes) {
+    const y = laneY.get(s.id), x0 = X(s.from), x1 = Math.max(x0 + 6, X(s.to));
+    ctx.fillStyle = `hsl(${s.hue},62%,${s.died == null ? 55 : 72}%)`;
+    roundRect(ctx, x0, y - lh * 0.32, x1 - x0, lh * 0.64, lh * 0.32); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x0, y, lh * 0.36, lh * 0.3, 0, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${s.hue},62%,45%)`; ctx.fill();
+  }
+  // yaşayanların ve en kalabalığın adı
+  ctx.font = `800 ${Math.max(16, Math.min(22, lh * 0.7))}px ${FONT_BIG}`;
+  for (const s of lanes) {
+    if (s.died != null && s.peak < 200 && s !== lanes[0]) continue;
+    const y = laneY.get(s.id), x0 = X(s.from);
+    const right = x0 > px + pw * 0.55;
+    ctx.textAlign = right ? 'right' : 'left';
+    ctx.fillStyle = '#23232b';
+    ctx.fillText(s.name + (s.died == null ? ' ●' : ''), right ? x0 - 12 : x0 + 14, y + 7);
+  }
+  ctx.textAlign = 'left'; ctx.font = `700 30px ${FONT_HAND}`; ctx.fillStyle = '#6b6b6b';
+  ctx.fillText('başlangıç', px, box.y + box.h - 18);
+  ctx.textAlign = 'right';
+  ctx.fillText('● hayatta', px + pw, box.y + box.h - 18);
+}
+
+// ---------- evrim seçimi (felaket atlatılınca) ----------
+export const OFFER_Y = [700, 950, 1200];
+export const offerRect = (i) => ({ x: 90, y: OFFER_Y[i], w: W - 180, h: 220 });
+export function drawOffer(ctx, sim, ui) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = 'rgba(20,10,4,0.72)';
   ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
-  ctx.font = `800 92px ${FONT_BIG}`;
-  outlined(ctx, 'SOYUN TÜKENDİ', W / 2, 300, 14, '#ff7a5c');
-  outlinedPair(ctx, 'NESİL ', String(sim.maxGen), W / 2, 560, `800 190px ${FONT_BIG}`, 20);
-  if (ui.newBest) {
+  ctx.font = `800 84px ${FONT_BIG}`;
+  outlined(ctx, '🧬 EVRİM SEÇ', W / 2, 520, 12, '#ffd23a');
+  ctx.font = `700 50px ${FONT_HAND}`;
+  outlined(ctx, 'Felaketi atlattın! Soyuna bir özellik seç', W / 2, 610, 7);
+  sim.offer.forEach((id, i) => {
+    const U = UPGRADES[id], r = offerRect(i), lvl = (sim.ups[id] || 0) + 1;
+    const pop = Math.min(1, (ui.now - (ui.offerAt || 0)) / 250 - i * 0.25);
+    if (pop <= 0) return;
     ctx.save();
-    ctx.translate(W / 2, 700); ctx.rotate(-0.06);
-    ctx.font = `800 72px ${FONT_BIG}`; ctx.textAlign = 'center';
-    const sw = ctx.measureText('YENİ REKOR!').width + 70;
-    ctx.lineWidth = 8; ctx.strokeStyle = '#d8331f';
-    roundRect(ctx, -sw / 2, -62, sw, 110, 14); ctx.stroke();
-    ctx.fillStyle = '#ff5a3c';
-    ctx.fillText('YENİ REKOR!', 0, 18);
+    ctx.globalAlpha = pop;
+    ctx.translate(0, (1 - pop) * 40);
+    paperButton(ctx, r, '', false);
+    ctx.textAlign = 'center'; ctx.font = `96px ${FONT_BIG}`; ctx.fillStyle = '#000'; ctx.textBaseline = 'middle';
+    ctx.fillText(U.icon, r.x + 110, r.y + r.h / 2 + 6);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#23232b';
+    ctx.font = `800 54px ${FONT_BIG}`;
+    ctx.fillText(U.name, r.x + 210, r.y + 80);
+    ctx.font = `500 36px ${FONT_BIG}`; ctx.fillStyle = '#5a4a3a';
+    ctx.fillText(U.tip, r.x + 210, r.y + 145, r.w - 240);
+    ctx.textAlign = 'right'; ctx.font = `700 40px ${FONT_HAND}`; ctx.fillStyle = '#d8331f';
+    ctx.fillText(`${lvl}/${U.max}`, r.x + r.w - 30, r.y + 50);
+    ctx.textBaseline = 'alphabetic';
     ctx.restore();
-  } else {
-    outlinedPair(ctx, 'Rekorun: ', `${ui.best}`, W / 2, 700, `800 56px ${FONT_BIG}`, 9);
-  }
-  const m = Math.floor(sim.t / 60), s = Math.floor(sim.t % 60);
-  const stats = [
-    `Atlatılan felaket: ${ui.survived}`,
-    `Ortaya çıkan tür: ${sim.namedCount()}`,
-    `Kullanılan kart: ${sim.actions.length}`,
-    `Deney süresi: ${m}:${String(s).padStart(2, '0')}`,
-  ];
-  ctx.font = `700 54px ${FONT_HAND}`; ctx.textAlign = 'center';
-  stats.forEach((l, i) => outlined(ctx, l, W / 2, 870 + i * 82, 7));
-  if (ui.online) {
-    ctx.font = `800 46px ${FONT_BIG}`; ctx.textAlign = 'center';
-    const msg = ui.rank ? `🏆 Sıralamada ${ui.rank.rank}. oldun (${ui.rank.players} oyuncu)` : ui.rankMsg || '';
-    if (msg) outlined(ctx, msg, W / 2, 1220, 8, '#ffd23a');
-    paperButton(ctx, OVER_BTN.board, '🏆 Sıralama', false, 56);
-  }
-  paperButton(ctx, OVER_BTN.again, 'Tekrar oyna', true, 56);
-  paperButton(ctx, OVER_BTN.share, ui.shareMsg || 'Skorunu paylaş', false, 56);
+  });
 }
 
 // ---------- sıralama ----------

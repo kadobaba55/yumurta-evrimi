@@ -15,7 +15,7 @@ export const CFG = {
   R: 500,               // petri kabı yarıçapı
   dt: 1 / 30,           // sabit adım (saniye)
   foodMax: 1100,
-  foodRate: 34,         // saniyede ortalama yiyecek
+  foodRate: 40,         // saniyede ortalama yiyecek
   foodEnergy: 16,      // kırıntı
   bigEnergy: 75,       // tohum: sadece iri yumurtalar yutabilir
   bigShare: 0.55,      // zengin bölgelerde çıkanların tohum olma oranı
@@ -25,7 +25,7 @@ export const CFG = {
   patches: 4,           // zengin yiyecek bölgeleri
   patchShare: 0.5,
   startCount: 20,
-  maxEggs: 2500,
+  maxEggs: 5000,
   mut: 0.085,           // gen başına log-normal mutasyon
   speciesDist: 0.5,    // log-gen uzayında yeni tür eşiği
   nameAt: 25,           // bir aday tür bu kadar bireye ulaşınca isim alır
@@ -70,6 +70,19 @@ export const DISASTERS = {
   avci: { name: 'AVCI İSTİLASI', icon: '🦖', card: 'tuzak', hint: 'Dışarıda hızlılar ve devler kaçar' },
 };
 
+// Her atlatılan felaketten sonra 3 tanesinden biri seçilir; seçimler üst üste biner
+export const UPGRADES = {
+  bereket: { name: 'Bereket', icon: '🌾', tip: 'Yem iki katına yaklaşır', max: 6 },
+  toprak: { name: 'Verimli toprak', icon: '🌱', tip: 'Kaba yeni bir zengin bölge', max: 4 },
+  dogurgan: { name: 'Doğurganlık', icon: '🥚', tip: 'Yumurtalar daha erken ürer', max: 4 },
+  omur: { name: 'Uzun ömür', icon: '⏳', tip: 'Yaşam süresi %25 uzar', max: 3 },
+  genis: { name: 'Geniş alan', icon: '⭕', tip: 'Kart alanları %20 büyür', max: 4 },
+  kalici: { name: 'Kalıcı kartlar', icon: '⌛', tip: 'Kartlar 10 sn uzun sürer', max: 3 },
+  puan: { name: 'Hızlı puan', icon: '⚡', tip: 'Deney puanı %25 hızlı dolar', max: 3 },
+  cep: { name: 'Büyük cep', icon: '👝', tip: 'En fazla puan +3', max: 2 },
+  evrim: { name: 'Hızlı evrim', icon: '🧬', tip: 'Mutasyonlar %40 artar', max: 3 },
+};
+
 function randDisk(rng, r) {
   const a = rng() * Math.PI * 2, d = Math.sqrt(rng()) * r;
   return [Math.cos(a) * d, Math.sin(a) * d];
@@ -79,7 +92,7 @@ export function replay(seed, team, actions, maxSteps = 2e6) {
   const s = new Sim(seed, { team });
   let i = 0;
   while (!s.over && s.stepCount < maxSteps) {
-    while (i < actions.length && actions[i].s === s.stepCount) { const a = actions[i++]; s.play(a.c, a.x, a.y); }
+    while (i < actions.length && actions[i].s === s.stepCount) { const a = actions[i++]; a.c === 'up' ? s.choose(a.x) : s.play(a.c, a.x, a.y); }
     s.step();
   }
   return s.maxGen;
@@ -105,6 +118,8 @@ export class Sim {
     this.actions = [];
     this.zones = []; this.predators = []; this.meteors = [];
     this.active = null;
+    this.mods = { food: 1, repro: 0.75, life: 1, area: 1, dur: 0, mut: 1, dpEvery: this.cfg.dpEvery, dpMax: this.cfg.dpMax };
+    this.ups = {}; this.offer = null; this.peakPop = 0;
     this.drng = mulberry32((this.seed ^ 0x9e3779b9) >>> 0);
     this._schedule();
     this._initFood();
@@ -225,13 +240,13 @@ export class Sim {
     sp.count++;
     return {
       id: this.nextId++, x, y, h: this.rng() * Math.PI * 2,
-      g, sp: sp.id, gen, energy, age: 0, maxAge: 70 + this.rng() * 40,
+      g, sp: sp.id, gen, energy, age: 0, maxAge: (70 + this.rng() * 40) * this.mods.life,
       tf: null, st: 0, dead: false, born: this.t,
     };
   }
 
   _mutate(g) {
-    const m = this.cfg.mut, c = {};
+    const m = this.cfg.mut * this.mods.mut, c = {};
     for (const k of GENES) c[k] = clamp(g[k] * Math.exp(this.gauss() * m), RANGE[k][0], RANGE[k][1]);
     return c;
   }
@@ -286,10 +301,39 @@ export class Sim {
     if (x * x + y * y > R * R) return false;
     this.dp -= C.cost;
     this.actions.push({ s: this.stepCount, c, x, y });
-    this.zones.push({ type: c, x, y, r: C.r, until: this.t + C.dur, acc: 0 });
+    this.zones.push({ type: c, x, y, r: C.r * this.mods.area, until: this.t + C.dur + this.mods.dur, dur: C.dur + this.mods.dur, acc: 0 });
     this.events.push({ t: this.t, type: 'card', card: c, x, y });
     return true;
   }
+  // ---------- evrim yükseltmeleri ----------
+  _offer() {
+    const pool = Object.keys(UPGRADES).filter((k) => (this.ups[k] || 0) < UPGRADES[k].max);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(this.drng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    this.offer = pool.slice(0, 3);
+    if (this.offer.length) this.events.push({ t: this.t, type: 'offer' });
+    else this.offer = null;
+  }
+  choose(id) {
+    if (!this.offer || !this.offer.includes(id) || this.over) return false;
+    const M = this.mods;
+    this.ups[id] = (this.ups[id] || 0) + 1;
+    if (id === 'bereket') M.food += 1;
+    else if (id === 'toprak') {
+      const [x, y] = randDisk(this.drng, this.cfg.R * 0.65);
+      this.patches.push({ x, y, r: 80 + this.drng() * 40 });
+    } else if (id === 'dogurgan') M.repro = Math.max(0.45, M.repro - 0.07);
+    else if (id === 'omur') M.life += 0.25;
+    else if (id === 'genis') M.area += 0.2;
+    else if (id === 'kalici') M.dur += 10;
+    else if (id === 'puan') M.dpEvery *= 0.8;
+    else if (id === 'cep') M.dpMax += 3;
+    else if (id === 'evrim') M.mut += 0.4;
+    this.offer = null;
+    this.actions.push({ s: this.stepCount, c: 'up', x: id, y: 0 });
+    this.events.push({ t: this.t, type: 'upgrade', id });
+    return true;
+  }
+
   inZone(type, x, y) {
     for (const z of this.zones) if (z.type === type && (z.x - x) ** 2 + (z.y - y) ** 2 < z.r * z.r) return true;
     return false;
@@ -344,6 +388,7 @@ export class Sim {
       this.active = null; this.predators = []; this.meteors = [];
       this.events.push({ t: this.t, type: 'survived', dz: D.types });
       this.dzi++;
+      this._offer();
     }
   }
   _predators(dt) {
@@ -388,7 +433,7 @@ export class Sim {
       z.acc += 6 * dt;
       while (z.acc >= 1) {
         z.acc -= 1;
-        if (this.foodCount >= this.cfg.foodMax * 1.3) continue;
+        if (this.foodCount >= this.cfg.foodMax * this.mods.food * 1.3) continue;
         const [dx, dy] = this.randInDisk(z.r);
         if ((z.x + dx) ** 2 + (z.y + dy) ** 2 < (R - 6) ** 2) this._addFood(z.x + dx, z.y + dy, this.rng() < 0.3);
       }
@@ -404,16 +449,17 @@ export class Sim {
     const A = this.active;
 
     this.dpT += dt;
-    if (this.dpT >= c.dpEvery) { this.dpT -= c.dpEvery; this.dp = Math.min(c.dpMax, this.dp + 1); }
+    const M = this.mods;
+    if (this.dpT >= M.dpEvery) { this.dpT -= M.dpEvery; this.dp = Math.min(M.dpMax, this.dp + 1); }
     if (this.zones.length) this._zones(dt);
 
     let foodMul = this.season();
     if (this.has('kitlik')) foodMul *= Math.max(0.1, 0.35 - 0.03 * A.k);
     if (this.has('buzul')) foodMul *= 0.8;
-    this.foodAcc += c.foodRate * foodMul * dt;
+    this.foodAcc += c.foodRate * foodMul * M.food * dt;
     while (this.foodAcc >= 1) {
       this.foodAcc -= 1;
-      if (this.foodCount < c.foodMax) this._spawnFood();
+      if (this.foodCount < c.foodMax * M.food) this._spawnFood();
     }
 
     for (const m of this.meteors) {
@@ -467,7 +513,7 @@ export class Sim {
       e.energy -= cost * dt;
       e.age += dt;
       if (e.energy <= 0 || e.age > e.maxAge) { e.dead = true; continue; }
-      if (e.energy >= 0.75 * emaxOf(g) && e.age > 4 && this.eggs.length + births.length < c.maxEggs) {
+      if (e.energy >= M.repro * emaxOf(g) && e.age > 4 && this.eggs.length + births.length < c.maxEggs) {
         this._reproduce(e, births);
       }
     }
@@ -520,6 +566,7 @@ export class Sim {
     }
 
     this.gen = this.eggs.reduce((a, e) => Math.max(a, e.gen), 0);
+    if (this.eggs.length > this.peakPop) this.peakPop = this.eggs.length;
     const n = this.eggs.length || 1;
     const mean = {};
     for (const k of GENES) mean[k] = this.eggs.reduce((a, e) => a + e.g[k], 0) / n;

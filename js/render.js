@@ -143,14 +143,18 @@ export class Renderer {
     for (const z of sim.zones) drawZone(ctx, z, Math.min(1, (z.until - now) / 3), z.until - now);
 
     // yumurtalar
+    // binlerce yumurta için: her tür bir kez hazır resme çizilir, sonra döndürülüp basılır
     const S = opts.S || 1;
     const look = new Map();
-    const detail = cam.z * dpr * S > 0.55;
+    const m = ctx.getTransform(), k0 = m.a;
     for (const e of sim.eggs) {
-      let L = look.get(e.sp);
-      if (!L) { const d = sim.displaySpecies(e.sp); L = { hue: d.hue, lin: d.lineage }; look.set(e.sp, L); }
-      drawEgg(ctx, e, L, detail, S);
+      let spr = look.get(e.sp);
+      if (!spr) { const d = sim.displaySpecies(e.sp); spr = eggSprite(d.hue, d.lineage); look.set(e.sp, spr); }
+      const k = ((radiusOf(e.g) * S) / SPR_R) * k0, c = Math.cos(e.h) * k, s = Math.sin(e.h) * k;
+      ctx.setTransform(c, s, -s, c, m.a * e.x + m.e, m.d * e.y + m.f);
+      ctx.drawImage(spr, -SPR_HALF, -SPR_HALF);
     }
+    ctx.setTransform(m);
 
     // avcılar
     for (const p of sim.predators) drawPredator(ctx, p, S);
@@ -269,7 +273,7 @@ function drawZone(ctx, z, a, left) {
   ctx.fillText(icon, z.x, z.y - z.r + 34);
   if (left !== null) {
     ctx.strokeStyle = line; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.arc(z.x, z.y - z.r + 34, 30, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * left) / 30); ctx.stroke();
+    ctx.beginPath(); ctx.arc(z.x, z.y - z.r + 34, 30, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * left) / (z.dur || 30)); ctx.stroke();
   }
   ctx.textBaseline = 'alphabetic';
   ctx.restore();
@@ -301,6 +305,21 @@ function drawPredator(ctx, p, S) {
   for (let i = -2; i <= 2; i++) { ctx.moveTo(r * 1.15, i * r * 0.14); ctx.lineTo(r * 1.4, i * r * 0.14 + r * 0.06); ctx.lineTo(r * 1.15, i * r * 0.14 + r * 0.12); }
   ctx.fill();
   ctx.restore();
+}
+
+const SPR_R = 24, SPR_HALF = 64;
+const sprites = new Map();
+function eggSprite(hue, lin) {
+  const key = `${Math.round(hue / 3) * 3}|${lin}`;
+  let c = sprites.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = c.height = SPR_HALF * 2;
+  const g = c.getContext('2d');
+  g.translate(SPR_HALF, SPR_HALF);
+  drawEgg(g, { x: 0, y: 0, h: 0, id: 0, g: { size: SPR_R / 5, speed: 1 } }, { hue, lin }, true);
+  sprites.set(key, c);
+  return c;
 }
 
 function drawEgg(ctx, e, L, detail, S = 1) {
