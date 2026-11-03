@@ -1,0 +1,9 @@
+name = "yumurta-skor"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# database_id, "wrangler d1 create yumurta-skor" çıktısından gelir
+[[d1_databases]]
+binding = "DB"
+database_name = "yumurta-skor"
+database_id = "BURAYA"
