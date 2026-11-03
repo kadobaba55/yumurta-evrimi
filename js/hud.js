@@ -353,12 +353,13 @@ export function drawBoard(ctx, ui) {
     outlined(ctx, ui.boardMsg || 'Yükleniyor…', W / 2, 700, 7);
   } else {
     // takım savaşı: her oyuncunun en iyi skoru takımına eklenir
-    const c = b.teams?.Çatlak?.total || 0, p = b.teams?.Patlak?.total || 0, tot = c + p || 1;
+    const c = b.teams?.Çatlak?.total || 0, p = b.teams?.Patlak?.total || 0;
+    const share = c + p ? c / (c + p) : 0.5;   // skor yokken çubuk ortada
     const tx = 90, ty = 400, tw = 900;
     ctx.save();
     roundRect(ctx, tx, ty, tw, 70, 35); ctx.clip();
     ctx.fillStyle = `hsl(${TEAM_HUE.Patlak},62%,55%)`; ctx.fillRect(tx, ty, tw, 70);
-    ctx.fillStyle = `hsl(${TEAM_HUE.Çatlak},62%,55%)`; ctx.fillRect(tx, ty, (tw * c) / tot, 70);
+    ctx.fillStyle = `hsl(${TEAM_HUE.Çatlak},62%,55%)`; ctx.fillRect(tx, ty, tw * share, 70);
     ctx.restore();
     ctx.lineWidth = 5; ctx.strokeStyle = '#fff'; roundRect(ctx, tx, ty, tw, 70, 35); ctx.stroke();
     ctx.font = `800 38px ${FONT_BIG}`;
