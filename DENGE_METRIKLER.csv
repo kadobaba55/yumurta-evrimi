@@ -1,0 +1,75 @@
+﻿Kategori;Parametre;Değer;Formül / Birim;Mantık (neden bu değer)
+Genel;Petri kabı yarıçapı;500;piksel (oyun dünyası);Tüm alan, kart ve meteor boyutları buna göre ölçeklendi. Kart alanı kabın ~%11'i.
+Genel;Simülasyon adımı;1/30;saniye;Sabit adım: aynı tohum + aynı hamleler = aynı skor. Sıralama doğrulaması buna dayanıyor.
+Genel;Oyun hızları;1× 2× 4×;çarpan;8× istenmedi, 4× hem izlenebilir hem tur süresini makul tutar.
+Genel;Skor;En yüksek nesil;maxGen;Herkes için tek hedef. Hızlı üreyen ve uzun yaşayan nüfus daha yüksek nesle ulaşır.
+Genel;Başlangıç yumurtası;20;adet;Erken oyunda nüfus kırılgan, ilk felaket (70. sn) öncesi büyümeye vakit kalır.
+Nüfus;Sabit yumurta tavanı;Yok;-;Kadir'in isteği: nüfusu doğal yollar (yem, kalabalık, felaket) düşürür, oyuncu sonsuza gidebilirmiş gibi hisseder.
+Nüfus;Acil durum emniyeti;20000;adet;Yalnızca telefon çökmesin diye. Testlerde en fazla 3.550 görüldü, hiç devreye girmedi.
+Nüfus;Kalabalık eşiği;8;yumurta / 40×40 kare;Bir karede 8'den fazla yumurta varsa oradakilerin gideri artar. 6 iken nüfus 800'de tıkanıyordu.
+Nüfus;Kalabalık katsayısı;0,3;gider × (1 + 0,3 × (n/8 − 1));Sıkışan yumurtalar aç kalır, dağılanlar yaşar. Tavan koymaz, büyümeyi yumuşakça yavaşlatır.
+Nüfus;Yaşam süresi;70–110;saniye × ömür çarpanı;Nesiller sürekli yenilenir, nüfus yaşlılıktan da doğal olarak azalır.
+Nüfus;Üreme eşiği;%75;depo enerjisinin oranı;Yumurta deposunun %75'i dolunca bölünür. Doğurganlık yükseltmesi bunu en fazla %60'a indirir.
+Nüfus;Üremede enerji;%45 + %45;anne ve yavru;%10 kayıp: bölünmenin bedeli. Sınırsız patlamayı önler.
+Nüfus;Üreme için en az yaş;4;saniye;Yeni doğan anında tekrar bölünüp zincirleme patlama yapamaz.
+Yem;Yem üretimi;40;adet / saniye × yem çarpanı × mevsim;Nüfusun asıl sınırlayıcısı (pop_probe ölçümüyle doğrulandı).
+Yem;Kapta en fazla yem;1100;adet × yem çarpanı;Yem birikip sonsuz stok oluşmasın.
+Yem;Kırıntı enerjisi;16;enerji;Her boy yiyebilir, küçükler için ana besin.
+Yem;Tohum enerjisi;75;enerji;Yalnızca boyu 1,25 ve üstü yutabilir: iri olmanın ödülü.
+Yem;Zengin bölge sayısı;4;bölge;Yemin %50'si buralarda çıkar, nüfus kümelenir, kalabalık ve kart yerleşimi anlam kazanır.
+Yem;Zengin bölgede tohum oranı;%55;oran;Zengin bölgeler irileri çeker, küçükler dışarıda kırıntıyla yaşar.
+Yem;Mevsim döngüsü;160 sn, ±%20;yem × (1 ± 0,2);Felaket olmasa da bolluk/kıtlık dalgası, nüfus hiç durağan kalmaz.
+Gen;Hız aralığı;0,25 – 3,2;45 × hız piksel/sn;Hızlı = yeme ve avcıdan kaçmaya iyi ama pahalı.
+Gen;Boy aralığı;0,4 – 2,6;yarıçap 5 × boy;Üst sınır 3,2 iken devler kabı kaplıyor ve avcıya bağışık oluyordu.
+Gen;Görüş aralığı;0,25 – 3,2;30 + 45 × görüş piksel;Yemi uzaktan görmek, az ama sürekli gider.
+Gen;Enerji deposu;100 × boy^2,5;enerji;İriler açlığa çok dayanır ama doymaları zor.
+Gen;Saniyelik gider;boy² × (0,9 + 0,7 × hız²) + 0,45 × görüş;enerji/sn;Kütle × hız² fizikteki gibi: hızlı dev çok pahalıdır. Her gen bir bedelle gelir.
+Gen;Mutasyon;0,085;log-normal sapma / gen;Yavaş ama görünür evrim. Hızlı evrim yükseltmesi her seviyede +%40.
+Evrim;Yeni tür eşiği;0,7;log-gen uzayında uzaklık;0,5 iken 272 evrim çıkıyordu. Şimdi uzun turda 50–70.
+Evrim;İsim almak için gereken birey;en az 25 ve nüfusun %3'ü;adet;3.000 yumurtada 25 birey çok küçük bir grup. Nüfusla ölçeklenince evrim sayısı anlamlı kalır.
+Puan;Başlangıç puanı;6;puan;İlk felakete iki kart atacak kadar.
+Puan;Puan dolma hızı;1 puan / 6 sn;saniye;Felaket arasında 4–10 puan birikir, her karta değil, gerekene harcarsın.
+Puan;En fazla puan;10;puan;Biriktirmenin sınırı. Puan tavanda beklerken boşa gider: "harca ya da kaybet" baskısı.
+Kart;Kart fiyatı;3 + ⌊felaket sırası / 8⌋;puan;Sabit 3 iken geç oyunda kartlar bedavaya dönüyordu. Her 8 felakette +1, puan ekonomisi hep sıkı kalır.
+Kart;Kart alanı yarıçapı;165 (Tuzak 120);piksel × alan çarpanı;Kabın ~%11'i. Tüm nüfusu kurtarmaz, yerleşim becerisi önemli olur.
+Kart;Kart süresi;30;sn + Kalıcı bonusu;Felaket 35–60 sn sürer, uzun felakette ikinci kart veya Kalıcı yükseltmesi gerekir.
+Kart;Kural;Her kart tek bir felakete karşı;-;Kadir'in isteği: doğru kartı doğru yere atan oyuncu sonsuza gidebilir.
+Kart;Tohum yağmuru → Kıtlık;Alana 6 yem/sn;%30'u tohum;Kıtlıkta alan içi bir vaha olur.
+Kart;Isıtıcı → Buzul çağı;Alanın içi donmaz;-;Dışarıda soğuk gideri işler.
+Kart;Gölgelik → Sıcak dalgası;Alanın içi serin;-;Dışarıda sıcak gideri işler.
+Kart;Kalkan → Meteor;Meteor alana işlemez;-;Dışarıda meteorlar şansa bağlı.
+Kart;Tuzak → Avcı;Alana giren avcı ölür;yarıçap 120;Daha küçük alan: avcının yolunu tahmin etmek beceri ister.
+Felaket;İlk felaket;70;saniye;Nüfusun kurulmasına vakit.
+Felaket;Uyarı süresi;40;saniye önce;Doğru kartı hazırlamaya ve puan biriktirmeye vakit.
+Felaket;İlk beş felaket sırası;Kıtlık, Buzul, Meteor, Sıcak, Avcı;sabit;Her oyuncu her felaketi ve karşı kartı bir kez öğrenir.
+Felaket;Sonraki felaketler;rastgele (bir öncekiyle aynı olmaz);tohuma bağlı;Aynı tohum aynı sırayı verir.
+Felaket;Şiddet;1,3 + 0,35 × k;k = felaket sırası (0'dan);Sınırsız artar, geç oyunda kartsız alan ölümcül olur.
+Felaket;Felaket süresi;35 + min(25, 2k);saniye;35 sn'den 60 sn'ye uzar, bir kart artık yetmez.
+Felaket;Sakin ara;max(22, 70 − 3k);saniye;Toparlanma süresi kısalır, geç oyunda nefes alma payı az.
+Felaket;Çifte felaket;6. felaketten sonra her ikincisi, 16.'dan sonra hepsi;-;İki kart, iki yer, daha çok puan: iyi oyuncu için de oyun zorlaşmaya devam eder.
+Felaket;Üçlü felaket;24.'den sonra her üçüncüsü;-;İyi oynayan botları sonunda düşüren şey. "Sonsuz" hissi var ama oyun biter.
+Felaket;Kıtlık;yem × max(0,05 ile 0,3 − 0,025k);çarpan;Başta %30, geç oyunda %5 yem. Dışarıda minikler (az gider) dayanır.
+Felaket;Buzul çağı (soğuk);gider + şiddet × 1,6 ÷ boy;enerji/sn, yem ×0,8;Herkesi vurur, iriler daha dayanıklı. Önceden yalnızca küçükleri vuruyordu ve nüfus güvenli boya kaçıyordu.
+Felaket;Sıcak dalgası;gider + şiddet × 1,1 × boy;enerji/sn;Herkesi vurur, minikler daha dayanıklı. Soğukla birlikte boyu tek yöne kaçırmayı önler.
+Felaket;Meteor sayısı;süre × min(1,2 ile 0,45 + 0,05k);adet;Yavaşça artar, sınırlı.
+Felaket;Meteor yarıçapı;min(110, 55 + 3k);piksel;Sınırsızken kalkanın dışı tamamen siliniyordu. Şimdi dışarısı şansa bağlı.
+Felaket;Avcı sayısı;min(18, 3 + k);adet;Geç oyunda kalabalık sürü.
+Felaket;Avcı hızı;52 + 3 × min(15, k);piksel/sn;Hızlı yumurtalar bir süre kaçar.
+Felaket;Avcı boyu;2 + 0,08k;sınırsız;Kendinden küçük her yumurtayı yer. Devler bir süre kaçar, sonra onlar da avlanır.
+Felaket;Avcı görüşü;160;piksel;Avcı av arar, tuzağı yolunun üstüne koymak beceri.
+Yükseltme;Ne zaman;Her atlatılan felaketten sonra;3 seçenekten 1;Felaket başına bir karar daha. Seçim ekranı açıkken oyun durur.
+Yükseltme;Bereket;yem × 1,5;en fazla 5 (×7,6);Çarpımsal: büyüme stratejisi kartopu gibi büyür. Binlerce yumurtanın yolu.
+Yükseltme;Verimli toprak;yeni zengin bölge + yem × 1,15;en fazla 4;Yalnızca bölge eklerken zayıftı, şimdi gerçek bir seçenek.
+Yükseltme;Doğurganlık;üreme eşiği −0,05;en fazla 3 (en düşük 0,60);Daha hızlı nesil = doğrudan skor, bu yüzden küçük adımlarla sınırlı.
+Yükseltme;Uzun ömür;yaşam × +0,25;en fazla 3;Yaşlılıktan ölüm azalır, nesil hızı değişmez.
+Yükseltme;Geniş alan;kart alanı +%15;en fazla 3 (→ 239 yarıçap);Fazlası tek kartla kabın üçte birini koruyordu.
+Yükseltme;Kalıcı kartlar;kart süresi +8 sn;en fazla 3 (→ 54 sn);Yine de en uzun felakette (60 sn) yenileme gerekir.
+Yükseltme;Hızlı puan;puan aralığı × 0,8;en fazla 3 (6 → ~3,1 sn);Kart fiyatı arttıkça değerlenir.
+Yükseltme;Büyük cep;en fazla puan +2;en fazla 2 (→ 14);Çifte/üçlü felakete puan biriktirmek için.
+Yükseltme;Hızlı evrim;mutasyon +%40;en fazla 3;Felaketlere daha hızlı uyum, daha çok evrim.
+Liderlik;Skor doğrulama;skor ≤ süre/4 + 10;sunucu;Hile ile imkânsız skorları reddeder.
+Liderlik;Gönderim sınırı;15 sn / IP;sunucu;Spam ve yüklenmeye karşı.
+Liderlik;Test gönderimi;localhost ve ?debug kapalı;istemci;Test skorları gerçek tabloya gitmesin.
+Bot sonucu;Kart oynamayan;~16 oyun dk (≈4 gerçek dk);zirve ~570;Kartsız oyun erken biter: kartlar gerçekten fark yaratıyor.
+Bot sonucu;Felaket gelince kart atan;~55 oyun dk (≈14 gerçek dk);zirve 2.700–3.300, 56–67 evrim;Ortalama oyuncu hedefi tutuyor.
+Bot sonucu;Akıllı oynayan;75–92 oyun dk (≈21 gerçek dk);zirve ~3.500;Sonsuza gidiyor hissi var ama üçlü felaketlerde düşüyor.

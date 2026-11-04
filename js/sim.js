@@ -37,6 +37,9 @@ export const CFG = {
   warn: 40,             // felaket kaç sn önceden haber verilir
 };
 
+// Denge değiştikçe artır: kayıtlı hamleler yalnızca aynı sürümle birebir tekrar oynatılabilir
+export const VERSION = 3;
+
 export const GENES = ['speed', 'size', 'vision'];
 const RANGE = { speed: [0.25, 3.2], size: [0.4, 2.6], vision: [0.25, 3.2] };
 
@@ -121,7 +124,7 @@ export class Sim {
     this.zones = []; this.predators = []; this.meteors = [];
     this.active = null;
     this.mods = { food: 1, repro: 0.75, life: 1, area: 1, dur: 0, mut: 1, dpEvery: this.cfg.dpEvery, dpMax: this.cfg.dpMax };
-    this.ups = {}; this.offer = null; this.peakPop = 0;
+    this.ups = {}; this.offer = null; this.peakPop = 0; this.cause = null;
     this.drng = mulberry32((this.seed ^ 0x9e3779b9) >>> 0);
     this._schedule();
     this._initFood();
@@ -340,6 +343,21 @@ export class Sim {
     return true;
   }
 
+  // Soy neden tükendi: why = puan (karşı karta puan yetmedi) | kart (puan vardı, kart yoktu)
+  // | alan (kart vardı, alanın dışı dayanamadı) | sonra (felaket bitti, toparlanamadı)
+  _deathCause() {
+    const D = this.active || this.schedule[this.dzi - 1];
+    if (!D) return { k: -1, types: [], why: 'sonra', missing: [] };
+    const broke = [], missing = [];
+    if (this.active) for (const t of D.types) {
+      const c = DISASTERS[t].card;
+      if (this.zones.some((z) => z.type === c && z.until > this.t)) continue;
+      (this.dp < this.cardCost(c) ? broke : missing).push(c);
+    }
+    const why = !this.active ? 'sonra' : broke.length ? 'puan' : missing.length ? 'kart' : 'alan';
+    return { k: D.k, types: D.types, why, missing: [...broke, ...missing] };
+  }
+
   inZone(type, x, y) {
     for (const z of this.zones) if (z.type === type && (z.x - x) ** 2 + (z.y - y) ** 2 < z.r * z.r) return true;
     return false;
@@ -547,7 +565,8 @@ export class Sim {
 
     if (!this.over && this.eggs.length === 0) {
       this.over = true;
-      this.events.push({ t: this.t, type: 'over', score: this.maxGen });
+      this.cause = this._deathCause();
+      this.events.push({ t: this.t, type: 'over', score: this.maxGen, cause: this.cause });
     }
     this.statT += dt;
     if (this.statT >= 1) { this.statT = 0; this._stats(); }

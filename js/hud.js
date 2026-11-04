@@ -313,6 +313,7 @@ export function drawStart(ctx, ui) {
 }
 
 // ---------- oyun sonu ----------
+const SHORT = { kitlik: 'Kıtlık', buzul: 'Buzul', sicak: 'Sıcak', meteor: 'Meteor', avci: 'Avcı' };
 export function drawOver(ctx, sim, ui) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = 'rgba(20,10,4,0.8)';
@@ -335,7 +336,24 @@ export function drawOver(ctx, sim, ui) {
     outlinedPair(ctx, 'Rekorun: ', `${ui.best}`, W / 2, 490, `800 50px ${FONT_BIG}`, 8);
   }
 
-  drawTree(ctx, sim, { x: 60, y: 550, w: W - 120, h: 560 });
+  drawTree(ctx, sim, { x: 60, y: 550, w: W - 120, h: 470 });
+
+  // soy neden tükendi
+  const c = sim.cause;
+  if (c && c.types.length) {
+    const names = c.types.map((t) => `${DISASTERS[t].icon} ${SHORT[t]}`).join(' + ');
+    const cards = c.missing.map((k) => CARDS[k].name).join(', ');
+    const why = {
+      puan: `${cards} için puanın yetmedi`,
+      kart: `Karşı kartı koymadın: ${cards}`,
+      alan: 'Kartın vardı, alanın dışı dayanamadı',
+      sonra: 'Felaket bitti ama soy toparlanamadı',
+    }[c.why];
+    ctx.font = `800 50px ${FONT_BIG}`; ctx.textAlign = 'center';
+    outlined(ctx, `Seni bitiren: ${names}`, W / 2, 1068, 8, '#ff9a7c');
+    ctx.font = `700 44px ${FONT_HAND}`;
+    outlined(ctx, why, W / 2, 1118, 7, '#ffe6b0');
+  }
 
   const m = Math.floor(sim.t / 60), s = Math.floor(sim.t % 60);
   ctx.font = `700 46px ${FONT_HAND}`; ctx.textAlign = 'center';

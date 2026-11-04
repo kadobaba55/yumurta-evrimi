@@ -1,5 +1,5 @@
 // Yumurta Evrimi · oyun döngüsü, dokunma, rekor, paylaşım ve kayıt
-import { Sim, CARDS, DISASTERS } from './sim.js';
+import { Sim, CARDS, DISASTERS, VERSION } from './sim.js';
 import { Renderer } from './render.js';
 import * as HUD from './hud.js';
 import * as NET from './net.js';
@@ -73,6 +73,8 @@ function startGame(team) {
   nameInput.blur();
   st.team = team;
   st.sim = new Sim(newSeed(), { team });
+  // aynı oturumda önceki oyunun bitişinden bu yana geçen saniye (tekrar oynama isteği)
+  st.after = st.lastOver ? Math.round((performance.now() - st.lastOver) / 1000) : null;
   R.bake(st.sim);
   Object.assign(R.cam, homeCam());
   st.mode = 'play'; st.paused = false; st.sel = null; st.aim = null;
@@ -83,6 +85,7 @@ function startGame(team) {
 function endGame() {
   st.mode = 'over'; st.sel = null; st.aim = null; st.drag = null;
   sfx.over();
+  st.lastOver = performance.now();
   const score = st.sim.maxGen;
   st.newBest = score > st.best;
   if (st.newBest) { st.best = score; save('yumurta_rekor', score); }
@@ -91,7 +94,11 @@ function endGame() {
   if (!st.online || params.has('debug') || location.hostname === 'localhost') return;
   const s = st.sim;
   st.rankMsg = 'Skor gönderiliyor…';
-  NET.submitScore({ name: st.name, team: s.cfg.team, score, seed: s.seed, simt: Math.round(s.t), cards: s.actions.length })
+  NET.submitScore({
+    name: st.name, team: s.cfg.team, score, seed: s.seed, simt: Math.round(s.t), cards: s.actions.length,
+    // tekrar oynatma ve ölçüm için: hamleler, sürüm, adım sayısı, ölüm sebebi
+    ver: VERSION, steps: s.stepCount, actions: s.actions, cause: s.cause, after: st.after,
+  })
     .then((r) => { st.rank = r; })
     .catch(() => { st.rankMsg = 'Skor gönderilemedi'; });
 }

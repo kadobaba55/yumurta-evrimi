@@ -1,9 +1,31 @@
 // Yumurta Evrimi · sıralama sunucusu (Cloudflare Worker + D1)
 // GET  /board?period=all|week  → en iyi 20 oyuncu + takım toplamları
-// POST /score {name, team, score, seed, simt, cards} → { rank, players }
+// POST /score {name, team, score, seed, simt, cards, ver, steps, actions, cause, after} → { rank, players }
+// actions ile oyun aynı sürümde birebir tekrar oynatılabilir (tools/oyuncu.mjs)
 
 const ALLOWED = ['https://kadobaba55.github.io', 'https://kadomakesgames.com', 'http://localhost:8765'];
 const WEEK = 7 * 24 * 3600 * 1000;
+const MOVES = new Set(['up', 'yagmur', 'isitici', 'golge', 'kalkan', 'tuzak']);
+const UPS = new Set(['bereket', 'toprak', 'dogurgan', 'omur', 'genis', 'kalici', 'puan', 'cep', 'evrim']);
+const DZ = new Set(['kitlik', 'buzul', 'sicak', 'meteor', 'avci']);
+
+// hamle listesini temizle; bozuksa null (skor yine kaydedilir, yalnızca tekrar oynatılamaz)
+function cleanActions(a) {
+  if (!Array.isArray(a) || a.length > 4000) return null;
+  const out = [];
+  for (const m of a) {
+    if (!m || !Number.isInteger(m.s) || m.s < 0 || !MOVES.has(m.c)) return null;
+    if (m.c === 'up') { if (!UPS.has(m.x)) return null; out.push({ s: m.s, c: 'up', x: m.x, y: 0 }); }
+    else { if (!Number.isFinite(m.x) || !Number.isFinite(m.y)) return null; out.push({ s: m.s, c: m.c, x: m.x, y: m.y }); }
+  }
+  return JSON.stringify(out);
+}
+function cleanCause(c) {
+  if (!c || !Array.isArray(c.types) || !c.types.every((t) => DZ.has(t))) return null;
+  const why = ['puan', 'kart', 'alan', 'sonra'].includes(c.why) ? c.why : null;
+  return JSON.stringify({ k: Math.floor(Number(c.k) || 0), types: c.types.slice(0, 3), why });
+}
+const int = (v) => (Number.isFinite(Number(v)) && v !== null ? Math.floor(Number(v)) : null);
 
 function cors(req) {
   const o = req.headers.get('origin') || '';
@@ -52,8 +74,10 @@ async function score(req, env) {
     .bind(ip, Date.now() - 15000).first();
   if (recent.n > 0) return json(req, { error: 'yavaş' }, 429);
 
-  await env.DB.prepare('INSERT INTO scores (name, team, score, seed, simt, cards, created, ip) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)')
-    .bind(name, team, sc, Math.floor(Number(b.seed) || 0), simt, cards, Date.now(), ip).run();
+  await env.DB.prepare(`INSERT INTO scores (name, team, score, seed, simt, cards, created, ip, ver, steps, actions, cause, after)
+    VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)`)
+    .bind(name, team, sc, Math.floor(Number(b.seed) || 0), simt, cards, Date.now(), ip,
+      int(b.ver), int(b.steps), cleanActions(b.actions), cleanCause(b.cause), int(b.after)).run();
 
   const rank = await env.DB.prepare(
     `SELECT COUNT(*) + 1 AS r FROM (SELECT MAX(score) AS s FROM scores GROUP BY lower(name)) WHERE s > ?1`,
